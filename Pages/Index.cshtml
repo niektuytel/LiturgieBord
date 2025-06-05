@@ -1,0 +1,449 @@
+﻿@page
+@model IndexModel
+
+<style>
+    /* Base styles for section cards */
+    .section-card {
+        cursor: pointer;
+        transition: background-color 0.2s, box-shadow 0.2s;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .section-card:hover {
+        filter: brightness(90%);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    /* Active state */
+    .section-card.active {
+        border: 2px solid #333;
+    }
+
+    /* Delete icon style */
+    .delete-icon {
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    .delete-icon:hover {
+        transform: scale(1.1);
+    }
+
+    /* Add Section button icon */
+    .add-section-btn i {
+        margin-right: 5px;
+    }
+
+    /* Style for the read-only title in the top menu */
+    .title-label {
+        margin-right: 0.5rem;
+    }
+
+    /* Badge style for type label on the section card */
+    .type-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    /* Editable title in the section container */
+    .editable-title {
+        cursor: pointer;
+    }
+    .editable-title:focus {
+        outline: none;
+        border-bottom: 1px dashed #000;
+    }
+</style>
+
+@Html.AntiForgeryToken()
+
+<!-- Hidden input for saving data -->
+<input type="hidden" name="SavedSections" id="SavedSections" />
+
+<!-- Top menu: displays read-only title, type badge, and a delete icon -->
+<div class="d-flex flex-wrap gap-2 mb-3" id="sectionsMenu"></div>
+
+<!-- Container for section editing -->
+<div id="sectionContainer" class="mb-3"></div>
+
+<!-- Buttons for manual saving -->
+<div class="mb-3">
+    <button type="button" class="btn btn-primary ms-2" onclick="saveSections()">
+        <i class="bi bi-save"></i> Opslaan
+    </button>
+</div>
+
+@section Scripts {
+    <script>
+        // ======== State & Initialization ========
+        let sectionsData = [];
+        let selectedSectionId = null;
+        const defaultType = "psalmen";
+
+        // Attempt to load initial data passed from the server
+        const initialData = @Html.Raw(Model.InitialDataJson ?? "[]");
+
+        if (initialData.length > 0) {
+            sectionsData = initialData;
+            // If any section was marked as having generated HTML, select it
+            const activeSection = sectionsData.find(sec => sec.htmlActive);
+            if (activeSection) {
+                selectedSectionId = activeSection.id;
+            } else {
+                // Otherwise, pick first section of defaultType or fallback to the very first
+                const defaultSection = sectionsData.find(sec => sec.type === defaultType) || sectionsData[0];
+                selectedSectionId = defaultSection.id;
+            }
+        } else {
+            // No server data: create two default sections
+            sectionsData.push({
+                id: generateId(),
+                title: "Psalm bord",
+                type: "psalmen",
+                content: [""],
+                htmlActive: false
+            });
+            sectionsData.push({
+                id: generateId(),
+                title: "Anders",
+                type: "anders",
+                content: "Enter text here...",
+                htmlActive: false
+            });
+            selectedSectionId = sectionsData[0].id;
+        }
+
+        // Initial rendering & autosave
+        renderMenu();
+        renderSelectedSection();
+        autoSaveSections();
+
+        // ======== Helper Functions ========
+
+        // Generate a unique ID for a new section
+        function generateId() {
+            return '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // Get the current ISO week number
+        function getCurrentWeekNumber() {
+            const now = new Date();
+            const startOfYear = new Date(now.getFullYear(), 0, 1);
+            const pastDaysOfYear = (now - startOfYear) / 86400000;
+            return Math.ceil((pastDaysOfYear + startOfYear.getDay() + 1) / 7);
+        }
+
+        // Escape HTML entities to prevent injection
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        // Serialize sectionsData to the hidden input (for AJAX or debugging)
+        function autoSaveSections() {
+            try {
+                const jsonData = JSON.stringify(sectionsData);
+                document.getElementById("SavedSections").value = jsonData;
+                console.log("Auto-saved:", sectionsData);
+            } catch (e) {
+                console.error("autoSaveSections failed:", e);
+            }
+        }
+
+        // ======== Rendering Functions ========
+
+        // Renders the top menu with each section's title, type badge, and delete button
+        function renderMenu() {
+            const menuContainer = document.getElementById("sectionsMenu");
+            menuContainer.innerHTML = "";
+
+            sectionsData.forEach(section => {
+                // Select background color based on htmlActive
+                const bgClass = section.htmlActive ? "bg-success" : "bg-secondary";
+
+                const menuItem = document.createElement("div");
+                menuItem.className = `section-card d-flex align-items-center p-2 text-white ${bgClass} rounded`
+                                    + (section.id === selectedSectionId ? " active" : "");
+                menuItem.onclick = () => {
+                    if (selectedSectionId !== section.id) {
+                        selectedSectionId = section.id;
+                        renderMenu();
+                        renderSelectedSection();
+                    }
+                };
+
+                // Title label
+                const titleLabel = document.createElement("span");
+                titleLabel.className = "title-label";
+                titleLabel.textContent = section.title;
+
+                // Type badge
+                const typeBadge = document.createElement("span");
+                typeBadge.className = "badge ms-2 type-badge "
+                    + (section.type === "psalmen" ? "bg-info" : "bg-warning");
+                typeBadge.textContent = section.type === "psalmen" ? "Psalmen" : "Anders";
+
+                // Delete button
+                const removeBtn = document.createElement("button");
+                removeBtn.type = "button";
+                removeBtn.className = "btn btn-danger btn-sm ms-2 delete-icon";
+                removeBtn.innerHTML = '<i class="bi bi-x"></i>';
+                removeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Delete section '${section.title}'?`)) {
+                        sectionsData = sectionsData.filter(sec => sec.id !== section.id);
+                        if (selectedSectionId === section.id) {
+                            selectedSectionId = sectionsData.length ? sectionsData[0].id : null;
+                        }
+                        renderMenu();
+                        renderSelectedSection();
+                        autoSaveSections();
+                    }
+                };
+
+                menuItem.appendChild(titleLabel);
+                menuItem.appendChild(typeBadge);
+                menuItem.appendChild(removeBtn);
+                menuContainer.appendChild(menuItem);
+            });
+
+            // "Add Section" button at the end
+            const addSectionBtn = document.createElement("button");
+            addSectionBtn.type = "button";
+            addSectionBtn.className = "btn btn-primary d-flex align-items-center add-section-btn";
+            addSectionBtn.innerHTML = '<i class="bi bi-plus"></i> Add Section';
+            addSectionBtn.onclick = addSection;
+            menuContainer.appendChild(addSectionBtn);
+        }
+
+        // Renders the editing UI for whichever section is selected
+        function renderSelectedSection() {
+            const container = document.getElementById("sectionContainer");
+            container.innerHTML = "";
+
+            const section = sectionsData.find(sec => sec.id === selectedSectionId);
+            if (!section) {
+                container.innerHTML = "<p>No section selected.</p>";
+                return;
+            }
+
+            const sectionDiv = document.createElement("div");
+            sectionDiv.className = "p-3 border bg-light rounded";
+
+            // Editable Title
+            const titleH5 = document.createElement("h5");
+
+            const titleSpan = document.createElement("span");
+            titleSpan.className = "editable-title me-2";
+            titleSpan.textContent = section.title;
+            titleSpan.onclick = () => {
+                titleSpan.contentEditable = "true";
+                titleSpan.focus();
+            };
+            titleSpan.onblur = () => {
+                section.title = titleSpan.innerText.trim() || section.title;
+                titleSpan.contentEditable = "false";
+                renderMenu();
+                autoSaveSections();
+            };
+            titleSpan.onkeydown = (e) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    titleSpan.blur();
+                }
+            };
+
+            titleH5.appendChild(titleSpan);
+
+            // Toggle type buttons (Psalmen / Anders)
+            const toggleGroup = document.createElement("div");
+            toggleGroup.className = "btn-group ms-3";
+
+            const psalmenBtn = document.createElement("button");
+            psalmenBtn.type = "button";
+            psalmenBtn.textContent = "Psalmen";
+            psalmenBtn.className = section.type === "psalmen"
+                ? "btn btn-sm btn-primary"
+                : "btn btn-sm btn-outline-secondary";
+            psalmenBtn.onclick = () => {
+                if (section.type !== "psalmen") {
+                    // If currently "anders" (string), split into array
+                    if (typeof section.content === "string") {
+                        section.content = section.content.split("\n");
+                    } else if (!Array.isArray(section.content)) {
+                        section.content = [""];
+                    }
+                    section.type = "psalmen";
+                    renderMenu();
+                    renderSelectedSection();
+                    autoSaveSections();
+                }
+            };
+
+            const andersBtn = document.createElement("button");
+            andersBtn.type = "button";
+            andersBtn.textContent = "Anders";
+            andersBtn.className = section.type === "anders"
+                ? "btn btn-sm btn-primary"
+                : "btn btn-sm btn-outline-secondary";
+            andersBtn.onclick = () => {
+                if (section.type !== "anders") {
+                    // If currently array, join into string
+                    if (Array.isArray(section.content)) {
+                        section.content = section.content.join("\n");
+                    } else if (typeof section.content !== "string") {
+                        section.content = "";
+                    }
+                    section.type = "anders";
+                    renderMenu();
+                    renderSelectedSection();
+                    autoSaveSections();
+                }
+            };
+
+            toggleGroup.appendChild(psalmenBtn);
+            toggleGroup.appendChild(andersBtn);
+            titleH5.appendChild(toggleGroup);
+
+            sectionDiv.appendChild(titleH5);
+
+            // Content area depending on type
+            if (section.type === "psalmen") {
+                const linesContainer = document.createElement("div");
+                linesContainer.className = "mb-2";
+
+                section.content.forEach((line, index) => {
+                    const lineDiv = document.createElement("div");
+                    lineDiv.className = "d-flex align-items-center mb-2";
+
+                    const input = document.createElement("input");
+                    input.type = "text";
+                    input.value = line;
+                    input.className = "form-control me-2";
+                    input.onchange = () => {
+                        section.content[index] = input.value;
+                        autoSaveSections();
+                    };
+
+                    const removeBtn = document.createElement("button");
+                    removeBtn.type = "button";
+                    removeBtn.className = "btn btn-danger btn-sm delete-icon";
+                    removeBtn.innerHTML = '<i class="bi bi-x"></i>';
+                    removeBtn.onclick = () => {
+                        section.content.splice(index, 1);
+                        renderSelectedSection();
+                        autoSaveSections();
+                    };
+
+                    lineDiv.appendChild(input);
+                    lineDiv.appendChild(removeBtn);
+                    linesContainer.appendChild(lineDiv);
+                });
+
+                sectionDiv.appendChild(linesContainer);
+
+                const addLineBtn = document.createElement("button");
+                addLineBtn.type = "button";
+                addLineBtn.className = "btn btn-primary";
+                addLineBtn.innerHTML = '<i class="bi bi-plus"></i> Add Line';
+                addLineBtn.onclick = () => {
+                    section.content.push("");
+                    renderSelectedSection();
+                    autoSaveSections();
+                };
+                sectionDiv.appendChild(addLineBtn);
+            } else {
+                const textarea = document.createElement("textarea");
+                textarea.className = "form-control";
+                textarea.rows = 12;
+                textarea.value = section.content;
+                textarea.onchange = () => {
+                    section.content = textarea.value;
+                    autoSaveSections();
+                };
+                sectionDiv.appendChild(textarea);
+            }
+
+            container.appendChild(sectionDiv);
+        }
+
+        // Adds a brand-new section, defaulting to the current week for title
+        function addSection() {
+            const weekNumber = getCurrentWeekNumber();
+            const newSection = {
+                id: generateId(),
+                title: "Week " + weekNumber,
+                type: defaultType,
+                content: (defaultType === "psalmen") ? [""] : "",
+                htmlActive: false
+            };
+            sectionsData.push(newSection);
+            selectedSectionId = newSection.id;
+            renderMenu();
+            renderSelectedSection();
+            autoSaveSections();
+        }
+
+        // Generates HTML for the selected section and marks it as active
+        function generateHtml() {
+            const section = sectionsData.find(sec => sec.id === selectedSectionId);
+            if (!section) {
+                alert("No section selected!");
+                return "";
+            }
+
+            let output = "";
+
+            if (section.type === "psalmen") {
+                output += `<div class="psalmen-output">\n`;
+                section.content.forEach(line => {
+                    output += `
+  <div class="line-container">
+    <p>${escapeHtml(line)}</p>
+    <div class="strookje">
+      <img src="./images/line.jpg" height="20px" width="100%" alt="Beschrijving foto" />
+    </div>
+  </div>\n`;
+                });
+                output += `</div>`;
+            } else {
+                output = `<div class="anders-output"><pre>${escapeHtml(section.content)}</pre></div>`;
+            }
+
+            // Mark only this section as htmlActive
+            sectionsData.forEach(sec => sec.htmlActive = false);
+            section.htmlActive = true;
+            renderMenu();
+            autoSaveSections();
+
+            return output;
+        }
+
+        // Sends sectionsData and generated HTML to the server via AJAX
+        function saveSections() {
+            const generated = generateHtml();
+            fetch('?handler=Save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'XSRF-TOKEN': document.querySelector('input[name="__RequestVerificationToken"]')?.value
+                },
+                body: JSON.stringify({
+                    sections: sectionsData,
+                    generated_html: generated
+                })
+            })
+            .then(response => {
+                if (response.ok) {
+                    console.log("Sections saved successfully.");
+                } else {
+                    console.error("Error saving sections.");
+                }
+            })
+            .catch(error => console.error("Error:", error));
+        }
+    </script>
+}
