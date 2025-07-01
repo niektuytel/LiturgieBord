@@ -36,7 +36,7 @@ public class IndexModel : PageModel
         }
 
         string fileContent = await System.IO.File.ReadAllTextAsync(liturgieFilePath);
-        string updatedContent = fileContent.Replace("<p>{BORD}</p>", generatedHtml.ToString());
+        string updatedContent = fileContent.Replace("{BORD}", generatedHtml.ToString());
 
         string outputFilePath = Path.Combine(Path.GetDirectoryName(liturgieFilePath)!, "liturgie_bord_generated.html");
         await System.IO.File.WriteAllTextAsync(outputFilePath, updatedContent);

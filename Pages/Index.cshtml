@@ -183,8 +183,8 @@
                 // Type badge
                 const typeBadge = document.createElement("span");
                 typeBadge.className = "badge ms-2 type-badge "
-                    + (section.type === "psalmen" ? "bg-info" : "bg-warning");
-                typeBadge.textContent = section.type === "psalmen" ? "Psalmen" : "Anders";
+                    + (section.type === "psalmen" ? "bg-info" : section.type === "liederen" ? "bg-warning" : "bg-warning");
+                typeBadge.textContent = section.type === "psalmen" ? "Psalmen" : section.type === "liederen" ? "Liederen" : "Anders";
 
                 // Delete button
                 const removeBtn = document.createElement("button");
@@ -258,7 +258,7 @@
 
             titleH5.appendChild(titleSpan);
 
-            // Toggle type buttons (Psalmen / Anders)
+            // Toggle type buttons (Psalmen / Liederen / Anders)
             const toggleGroup = document.createElement("div");
             toggleGroup.className = "btn-group ms-3";
 
@@ -270,13 +270,32 @@
                 : "btn btn-sm btn-outline-secondary";
             psalmenBtn.onclick = () => {
                 if (section.type !== "psalmen") {
-                    // If currently "anders" (string), split into array
                     if (typeof section.content === "string") {
                         section.content = section.content.split("\n");
                     } else if (!Array.isArray(section.content)) {
                         section.content = [""];
                     }
                     section.type = "psalmen";
+                    renderMenu();
+                    renderSelectedSection();
+                    autoSaveSections();
+                }
+            };
+
+            const liederenBtn = document.createElement("button");
+            liederenBtn.type = "button";
+            liederenBtn.textContent = "Liederen";
+            liederenBtn.className = section.type === "liederen"
+                ? "btn btn-sm btn-primary"
+                : "btn btn-sm btn-outline-secondary";
+            liederenBtn.onclick = () => {
+                if (section.type !== "liederen") {
+                    if (typeof section.content === "string") {
+                        section.content = section.content.split("\n");
+                    } else if (!Array.isArray(section.content)) {
+                        section.content = [""];
+                    }
+                    section.type = "liederen";
                     renderMenu();
                     renderSelectedSection();
                     autoSaveSections();
@@ -291,7 +310,6 @@
                 : "btn btn-sm btn-outline-secondary";
             andersBtn.onclick = () => {
                 if (section.type !== "anders") {
-                    // If currently array, join into string
                     if (Array.isArray(section.content)) {
                         section.content = section.content.join("\n");
                     } else if (typeof section.content !== "string") {
@@ -305,13 +323,14 @@
             };
 
             toggleGroup.appendChild(psalmenBtn);
+            toggleGroup.appendChild(liederenBtn);
             toggleGroup.appendChild(andersBtn);
             titleH5.appendChild(toggleGroup);
 
             sectionDiv.appendChild(titleH5);
 
             // Content area depending on type
-            if (section.type === "psalmen") {
+            if (section.type === "psalmen" || section.type === "liederen") {
                 const linesContainer = document.createElement("div");
                 linesContainer.className = "mb-2";
 
@@ -356,9 +375,10 @@
                 };
                 sectionDiv.appendChild(addLineBtn);
             } else {
+                // Anders
                 const textarea = document.createElement("textarea");
                 textarea.className = "form-control";
-                textarea.rows = 12;
+                textarea.rows = 8;
                 textarea.value = section.content;
                 textarea.onchange = () => {
                     section.content = textarea.value;
@@ -401,12 +421,20 @@
                 output += `<div class="psalmen-output">\n`;
                 section.content.forEach(line => {
                     output += `
-  <div class="line-container">
-    <p>${escapeHtml(line)}</p>
-    <div class="strookje">
-      <img src="./images/line.jpg" height="20px" width="100%" alt="Beschrijving foto" />
-    </div>
-  </div>\n`;
+          <div class="line-container">
+              <p class="auto-fit">${escapeHtml(line)}</p>
+              <div class="line-underline"></div>
+          </div>\n`;
+                });
+                output += `</div>`;
+            } else if (section.type === "liederen") {
+                output += `<div class="liederen-output">\n`;
+                section.content.forEach(line => {
+                    output += `
+          <div class="line-container">
+              <p class="auto-fit">${escapeHtml(line)}</p>
+              <div class="line-underline"></div>
+          </div>\n`;
                 });
                 output += `</div>`;
             } else {
