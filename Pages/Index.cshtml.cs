@@ -28,7 +28,7 @@ public class IndexModel : PageModel
 
     private static async Task<IActionResult> GenerateHtmlAsync(JsonElement generatedHtml)
     {
-        string liturgieFilePath = Path.Combine(Environment.CurrentDirectory, "Content", "liturgie_bord_template.html");
+        string liturgieFilePath = Path.Combine(Environment.CurrentDirectory, "wwwroot/Content", "liturgie_bord_template.html");
 
         if (!System.IO.File.Exists(liturgieFilePath))
         {

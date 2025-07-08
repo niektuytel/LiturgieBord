@@ -7,16 +7,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Update="Content\images\background.jpg">
+    <None Include="wwwroot\Content\images\background.jpg">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="Content\images\line.jpg">
+    <None Include="wwwroot\Content\images\line.jpg">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="Content\liturgie_bord_generated.html">
+    <None Include="wwwroot\Content\liturgie_bord_generated.html">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="Content\liturgie_bord_template.html">
+    <None Include="wwwroot\Content\liturgie_bord_template.html">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
