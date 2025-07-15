@@ -31,12 +31,13 @@ public class Program
             Task.Delay(500).ContinueWith(_ =>
             {
                 // === Edge ===
-                Process.Start(new ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = "msedge",
-                    Arguments = $"--kiosk \"{url}/Content/liturgie_bord_generated.html\" --edge-kiosk-type=fullscreen",
+                    Arguments = $"--kiosk \"{url}/Content/liturgie_bord_generated.html\" --edge-kiosk-type=fullscreen --no-first-run",
                     UseShellExecute = true
-                });
+                };
+                Process.Start(psi);
             });
         });
 

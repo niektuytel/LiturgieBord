@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>Liturgie Bord</title>
-    <meta http-equiv="refresh" content="1">
     <style>
         html, body {
             height: 100vh !important;
@@ -22,7 +21,7 @@
             font-family: Arial, sans-serif;
             min-height: 100vh;
         }
-        .psalmen-output, .liederen-output, .anders-output {
+        .psalmen-output, .anders-output {
             width: 100vw;
             display: flex;
             flex-direction: column;
@@ -64,9 +63,6 @@
             flex-shrink: 1;
             min-height: 0;
         }
-        .liederen-output p {
-            font-size: clamp(3.9vw, 5vw, 6vw);
-        }
         .anders-output pre {
             font-size: clamp(1vw, 4vw, 10vw);
             margin: 0;
@@ -107,40 +103,118 @@
 <body>
     {BORD}
     <script>
-    function updateFontSizeClass() {
-        const container = document.querySelector('.psalmen-output');
-        if (!container) return;
-        const count = container.querySelectorAll('.line-container').length;
-        for (let i = 1; i <= 10; i++) {
-            container.classList.remove('items-' + i);
-        }
-        container.classList.add('items-' + Math.min(count, 10));
-    }
-    updateFontSizeClass();
-
-    // Auto-fit font size for .auto-fit elements
-    function autoFitText() {
-        const elements = document.querySelectorAll('.auto-fit');
-        elements.forEach(el => {
-            const parent = el.parentElement;
-            // Start met een grote fontgrootte gebaseerd op het scherm
-            let vw = window.innerWidth / 100;
-            let vh = window.innerHeight / 100;
-            let fontSize = Math.min(vw, vh) * 10; // 10vw of 10vh, wat het kleinst is
-            el.style.fontSize = fontSize + 'px';
-
-            // Verklein totdat het past qua breedte én hoogte
-            while (
-                (el.scrollWidth > parent.clientWidth - 10 || el.scrollHeight > parent.clientHeight - 10) &&
-                fontSize > 60
-            ) {
-                fontSize -= 2;
-                el.style.fontSize = fontSize + 'px';
+        function updateFontSizeClass() {
+            const container = document.querySelector('.psalmen-output');
+            if (!container) return;
+            const count = container.querySelectorAll('.line-container').length;
+            for (let i = 1; i <= 10; i++) {
+                container.classList.remove('items-' + i);
             }
-        });
-    }
-    window.addEventListener('load', autoFitText);
-    window.addEventListener('resize', autoFitText);
+            container.classList.add('items-' + Math.min(count, 10));
+        }
+        updateFontSizeClass();
+        function autoFitText() {
+            const elements = Array.from(document.querySelectorAll('.auto-fit'));
+            if (!elements.length) return;
+
+            // Determine the available vertical space (you can swap window.innerHeight
+            // for a container height if needed)
+            const maxVertical = window.innerHeight - 20; // leave a little margin
+
+            // Compute an initial “big” font size based on viewport
+            const vw = window.innerWidth / 100;
+            const vh = window.innerHeight / 100;
+            const maxFontSize = Math.min(vw, vh) * 20;
+            const minFontSize = 45;   // don’t go below this
+
+            let fontSize = maxFontSize;
+
+            // Iteratively shrink until everything fits
+            while (fontSize > minFontSize) {
+                // Apply the candidate size
+                elements.forEach(el => el.style.fontSize = fontSize + 'px');
+
+                // Check each element’s overflow
+                let anyOverflow = elements.some(el => {
+                    const p = el.parentElement;
+                    const tooWide = el.scrollWidth > p.clientWidth - 10;
+                    const tooTall = el.scrollHeight > p.clientHeight - 10;
+                    return tooWide || tooTall;
+                });
+
+                // Check total stacked height
+                const totalHeight = elements.reduce((sum, el) => sum + el.scrollHeight, 0);
+                const verticalOverflow = totalHeight > maxVertical;
+
+                // (Optional) Check character count forcing wrap/overflow:
+                // You can estimate allowed chars = charsPerLine * maxLines
+                const charOverflow = elements.some(el => {
+                    const p = el.parentElement;
+                    const charsPerLine = Math.floor((p.clientWidth - 10) / fontSize * 1.1);
+                    const maxLines = Math.floor((p.clientHeight - 10) / fontSize);
+                    return el.textContent.length > charsPerLine * maxLines;
+                });
+
+                if (!anyOverflow && !verticalOverflow && !charOverflow) {
+                    break;
+                }
+                fontSize -= 1;  // step down; you can choose a different increment
+            }
+
+            // Finally, set the computed fontSize
+            elements.forEach(el => {
+                el.style.fontSize = fontSize + 'px';
+            });
+        }
+        window.addEventListener('load', autoFitText);
+        window.addEventListener('resize', autoFitText);
+    </script>
+    <script>
+        (function () {
+            // How often to check (in milliseconds)
+            const POLL_INTERVAL = 500;
+
+            // Name of the header to compare
+            const HEADER = 'Last-Modified';
+
+            // Holds the last seen header value
+            let lastSeen = null;
+
+            async function checkAndReload() {
+                try {
+                    const resp = await fetch(window.location.href, {
+                        method: 'HEAD',
+                        cache: 'no-cache'
+                    });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+                    const current = resp.headers.get(HEADER);
+                    if (!current) {
+                        console.warn(`Header "${HEADER}" not found.`);
+                        return;
+                    }
+
+                    if (lastSeen && new Date(current) > new Date(lastSeen)) {
+                        // Detected a newer modification date → reload
+                        window.location.reload();
+                    } else if (!lastSeen) {
+                        // First run: just record it
+                        lastSeen = current;
+                    } else {
+                        // Update even if equal, to keep comparing correctly
+                        lastSeen = current;
+                    }
+                } catch (err) {
+                    console.error('Update check failed:', err);
+                }
+            }
+
+            window.addEventListener('DOMContentLoaded', () => {
+                // Initial check immediately, then on interval
+                checkAndReload();
+                setInterval(checkAndReload, POLL_INTERVAL);
+            });
+        })();
     </script>
 </body>
 </html>
